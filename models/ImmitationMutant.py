@@ -120,7 +120,7 @@ class ImmitationLearningMutantAgent(LearningAgent):
         joint_pos_arr,target_pos_arr = self.get_train_vectors(demos)    
         joint_position_train_vector = torch.from_numpy(joint_pos_arr)
         target_position_train_vector = torch.from_numpy(target_pos_arr)
-        
+        self.total_train_size = len(joint_position_train_vector)
         # Output Action Tensors
         ground_truth_velocities = np.array([getattr(observation,'joint_velocities') for episode in demos for observation in episode]) #
         ground_truth_gripper_positions = np.array([getattr(observation,'gripper_open') for episode in demos for observation in episode])

@@ -20,6 +20,7 @@ class LearningAgent():
         self.logger = None
         self.input_state = None
         self.output_action = None
+        self.total_train_size = None # This is to mark the size of the training data for the agent. 
 
     def injest_demonstrations(self,demos:List[List[Observation]],**kwargs):
         raise NotImplementedError()

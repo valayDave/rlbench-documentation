@@ -87,7 +87,7 @@ class SimpleImmitationLearningAgent(LearningAgent):
         # Input State Tensors
         final_vector = self.get_train_vectors(demos)    
         final_torch_tensor = torch.from_numpy(final_vector)
-
+        self.total_train_size = len(final_torch_tensor)
         # Output Action Tensors
         ground_truth_velocities = np.array([getattr(observation,'joint_velocities') for episode in demos for observation in episode]) #
         ground_truth_gripper_positions = np.array([getattr(observation,'gripper_open') for episode in demos for observation in episode])

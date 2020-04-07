@@ -67,6 +67,7 @@ class ImmitationLearningAgent(LearningAgent):
         # $ This is done because we are training a dumb agent to estimate a policy based on just dumb current state
         # $ So for training we will use a 2D Matrix. If we were doing LSTM based training then the data modeling will change. 
         joint_position_train_vector = torch.from_numpy(self.get_train_vectors(demos))
+        self.total_train_size = len(joint_position_train_vector)
         # $ First Extract the output_action. Meaning the action that will control the kinematics of the robot. 
         ground_truth_velocities = np.array([getattr(observation,'joint_velocities') for episode in demos for observation in episode]) #
         # $ Create a matrix for gripper position vectors.                                                                                                                                                     

@@ -124,6 +124,8 @@ class ImmitationLearningConvolvingMutantAgent(LearningAgent):
     This will Not be considering Past actions/states while making these predictions. 
     But it will have a lot more information to help it guide decision making. 
     
+    ModularConvolutionalPolicyEstimator is not working out so well. 
+
     The Parent NN takes 4 tensors as input. Output is the actions. 
         - Modular child NN based on type of tensor. 
         - If tensor is like and image then Policy has conv NN otherwise just dense sequential NN
@@ -164,7 +166,7 @@ class ImmitationLearningConvolvingMutantAgent(LearningAgent):
         right_shoulder_rgb_vector = torch.from_numpy(right_shoulder_rgb)
         wrist_rgb  = torch.from_numpy(wrist_rgb)
         print("Wrist RGB Shape",wrist_rgb.shape,right_shoulder_rgb_vector.shape,left_shoulder_rgb_vector.shape)
-
+        self.total_train_size = len(target_position_train_vector)
         # Output Action Tensors
         ground_truth_velocities = np.array([getattr(observation,'joint_velocities') for episode in demos for observation in episode]) #
         ground_truth_gripper_positions = np.array([getattr(observation,'gripper_open') for episode in demos for observation in episode])
