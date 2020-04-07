@@ -8,6 +8,7 @@ class FinalData():
         self.agent_name = None
         self.loss = None
         self.simulation_analytics = None
+        self.total_data_size = 0
     
     def __str__(self):
         num_convergence_metrics = len(self.simulation_analytics['convergence_metrics'])
@@ -66,6 +67,7 @@ class TrainingSimulatorFlow(FlowSpec):
         agent.injest_demonstrations(demos)   
         loss = agent.train_agent(self.num_epochs)
         self.loss = loss
+        self.total_data_size = agent.total_train_size
         self.agent_name = agent.__class__.__name__
         self.model = agent.neural_network.state_dict()
         self.optimizer = agent.optimizer.state_dict()
@@ -95,6 +97,7 @@ class TrainingSimulatorFlow(FlowSpec):
             data.agent_name = task_data.agent_name
             data.loss = task_data.loss
             data.simulation_analytics = task_data.simulation_analytics
+            data.total_data_size = task_data.total_data_size
             final_data.append(data)
         
         self.final_data = final_data
