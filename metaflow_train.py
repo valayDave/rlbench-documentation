@@ -55,7 +55,7 @@ class FinalData():
             steps=str(self.simulation_analytics['max_steps_per_episode']),\
             num_convergence_metrics=str(num_convergence_metrics), \
             percent_converge=str(percent_converge), \
-            model_args=json.dumps(model_args,indent=4), \
+            model_args=json.dumps(model_args), \
             data_size="NO DATA" if data_size is 0 else str(data_size),
             grad_collect=collected_grads
             )
@@ -66,8 +66,8 @@ class TrainingSimulatorFlow(FlowSpec):
     @step
     def start(self):
         print("Importing data in this step")
-        self.num_demos=49
-        self.num_epochs=5 # Training epochs
+        self.num_demos=50
+        self.num_epochs=10 # Training epochs
         self.episode_length=100
         self.num_episodes=2 # Simulated Testing Epochs.
         self.variation_number = 0     
