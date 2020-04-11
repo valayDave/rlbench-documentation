@@ -102,10 +102,17 @@ class PutGroceriesEnvironment(SimulationEnvionment):
         demos = np.array(demos).flatten()
         self.shutdown()
         new_demos = []
+        if live_demos:
+            check_images = True
+        else:
+            if image_paths_output:
+                check_images = False
+            else:
+                check_images=True
         for episode in demos:
             new_episode = []
             for step in episode:
                 # Only transform images to in `Observation` object if its a live_demo or when image_out_path=False with live_demo=False
-                new_episode.append(self._get_state(step,check_images=not live_demos and not image_paths_output)) 
+                new_episode.append(self._get_state(step,check_images=check_images)) 
             new_demos.append(new_episode)
         return new_demos

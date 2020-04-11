@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils import data
+from torch.utils.data.dataset import Dataset
 from rlbench.backend.observation import Observation
 from typing import List
 import numpy as np
@@ -173,7 +174,7 @@ class ModularPolicyDataset(Dataset):
         self.joint_positions_x[index],\
         self.gripper_open[index],\
         self.pred_action[index],\
-        self.target_position[index]),\
+        self.target_position[index])
 
     def __len__(self):
         return len(self.EE_Pose_x) # of how many examples(images?) you have
@@ -216,23 +217,29 @@ class OnPolicyAgent(TorchAgent):
         # $ First Extract the output_action. Meaning the action that will control the kinematics of the robot. 
         ground_truth_velocities = torch.from_numpy(np.array([getattr(observation,'joint_velocities') for episode in demos for observation in episode]))
         # $ Create a matrix for gripper position vectors.                                                                                                                                                     
-        ground_truth_gripper_positions = np.array([getattr(observation,'gripper_open') for episode in demos for observation in episode])
-        ground_truth_gripper_positions = torch.from_numpy(ground_truth_gripper_positions.reshape(len(ground_truth_gripper_positions),1))
+        ground_truth_gripper_open = np.array([getattr(observation,'gripper_open') for episode in demos for observation in episode])
+        ground_truth_gripper_open = torch.from_numpy(ground_truth_gripper_open.reshape(len(ground_truth_gripper_open),1))
 
         # todo : Calculate Target pos Arra on basis  of the policy vector. 
-        gt_target_position = torch.rand(len(ground_truth_gripper_positions),3)
+        target_pos_vector = None
+        for demo in demos:
+            add_vector = self.get_target_coord_tensor(demo)
+            if target_pos_vector is None:
+                target_pos_vector = add_vector
+            else:
+                target_pos_vector = np.concatenate((target_pos_vector,add_vector),axis=0)
+        gt_target_position = torch.from_numpy(target_pos_vector)
         
         # demos[0][0].task_low_dim_state contains all target's coordinates
         self.logger.info("Creating Tensordata for Pytorch of Size : %s"%str(EE_Pose_x.size()))
         
         self.dataset = ModularPolicyDataset(
-            joint_positions_x, \
-            joint_positions_x, \
+            EE_Pose_x, \
+            wrist_rgb_x, \
             left_rgb_x, \
             right_rgb_x, \
-            wrist_rgb_x, \
-            EE_Pose_x, \
-            ground_truth_gripper_positions,\
+            joint_positions_x, \
+            ground_truth_gripper_open,\
             ground_truth_velocities,\
             gt_target_position \
         )
@@ -270,15 +277,15 @@ class OnPolicyAgent(TorchAgent):
 
                 self.optimizer.zero_grad()
                 gripper_open,pred_action,target_position = self.neural_network(
-                            EE_Pose_x,\
-                            wrist_rgb_x,\
-                            left_rgb_x,\
-                            right_rgb_x,\
-                            joint_positions_x,\
+                            EE_Pose_x.float(),\
+                            wrist_rgb_x.float(),\
+                            left_rgb_x.float(),\
+                            right_rgb_x.float(),\
+                            joint_positions_x.float(),\
                     )
-                gripper_open_criterion = self.loss_function(gripper_open,gripper_open_y)
-                pred_action_criterion = self.loss_function(pred_action,pred_action_y)
-                target_position_criterion = self.loss_function(target_position,target_position_y)
+                gripper_open_criterion = self.loss_function(gripper_open,gripper_open_y.float())
+                pred_action_criterion = self.loss_function(pred_action,pred_action_y.float())
+                target_position_criterion = self.loss_function(target_position,target_position_y.float())
                 total_loss = gripper_open_criterion + pred_action_criterion + target_position_criterion
                 total_loss.backward()
                 if self.collect_gradients:
@@ -291,6 +298,37 @@ class OnPolicyAgent(TorchAgent):
             self.logger.info('[%d] loss: %.6f' % (epoch + 1, running_loss / (steps+1)))
         
         return final_loss
+
+    def get_target_coord_tensor(self,demo:List[Observation]):
+        """
+        Finds Tensor which will hold XYZ coords according to where the robot needs to go. 
+        Eg. the function will return [[1,2,3],[1,2,3],[1,2,3],[5,6,7],[5,6,7],[5,6,7]] which denotes the final XYZ each observation needed to reach. 
+        """
+        prev = None
+        loading_traj_change_index = None
+        unloading_traj_change_index = None
+        for i,obs in enumerate(demo):
+            if prev is None:
+                prev = obs
+                continue
+            if obs.gripper_open!=prev.gripper_open:
+                if loading_traj_change_index is None:
+                    loading_traj_change_index = i
+                elif unloading_traj_change_index is None:
+                    unloading_traj_change_index = i 
+                # print("Gripper Pos Change",i)
+                # print(obs.gripper_pose)
+            prev = obs
+        
+        loading_traj_coords = np.array(demo[loading_traj_change_index].gripper_pose[:3])
+        loading_traj_coords = np.reshape(loading_traj_coords,(1,3))
+        loading_traj_coords = np.repeat(loading_traj_coords,loading_traj_change_index,axis=0)
+        
+        unloading_traj_coords = np.array(demo[unloading_traj_change_index].gripper_pose[:3])
+        unloading_traj_coords = np.repeat(np.reshape(unloading_traj_coords,(1,3)),len(demo)-loading_traj_change_index,axis=0)
+
+        target_pos_vector = np.concatenate((loading_traj_coords,unloading_traj_coords),axis=0)
+        return target_pos_vector
 
     def predict_action(self, demonstration_episode:List[Observation],**kwargs) -> np.array:
         self.neural_network.eval()
