@@ -21,13 +21,11 @@ class FullyConnectedPolicyEstimator(nn.Module):
     def __init__(self,num_states,num_actions,hidden_dims=200):
         super(FullyConnectedPolicyEstimator, self).__init__()
         self.fc1 = nn.Linear(num_states, hidden_dims)
-        self.fc2 = nn.Linear(hidden_dims, hidden_dims)
         self.fc3 = nn.Linear(hidden_dims, num_actions)
 
     # x is input to the network.
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
 
@@ -76,50 +74,67 @@ class GripperOpenEstimator(nn.Module):
 
     def forward(self,EE_Pose,wrist_rgb):
         wrist_op = self.wrist_camera_rgb_convolution_NN(wrist_rgb)
-        ee_op = self.wrist_camera_rgb_convolution_NN(EE_Pose)
+        ee_op = self.end_effector_pose_NN(EE_Pose)
         stacked_tensor = torch.cat((wrist_op,ee_op),1)
         x = F.relu(self.fc1(stacked_tensor))
-        x = self.fc3(x)
+        x = self.fc3(x) # Todo : Check for softmax . 
+        return x
+
+
+class TargetPositionPolicy(nn.Module):
+
+    def __init__(self,image_impact_dims=2,pred_hidden_dims=50):
+        self.l_rgb_conversion = ConvolutionalPolicyEstimator(image_impact_dims)
+        self.r_rgb_conversion = ConvolutionalPolicyEstimator(image_impact_dims)
+        self.pre_pred_layer = nn.Linear(image_impact_dims*2+1,pred_hidden_dims) # Because of gripper open 
+        self.output_layer = nn.Linear(pred_hidden_dims,3) # For X Y Z 
+
+    def forward(self,left_rgb,right_rgb,gripper_open):
+        left_rgb_op = self.l_rgb_conversion(left_rgb)
+        right_rgb_op = self.r_rgb_conversion(right_rgb)
+        stacked_tensor = torch.cat((left_rgb_op,right_rgb_op,gripper_open),1)
+        x = F.relu(self.pre_pred_layer(stacked_tensor))
+        x = self.output_layer(x)
         return x
 
 
 class ActionModeEstimator(nn.Module):
     
-    def __init__(self,action_dims=7):
+    def __init__(self,action_dims=7,hidden_pre_pred_dims=30,joint_pos_policy_hidden=20):
         super(ModularPolicyEstimator, self).__init__()
         modular_policy_op_dims = 10
         # Define Modular Policy dimes
-        self.joint_pos_policy = FullyConnectedPolicyEstimator(7,modular_policy_op_dims,hidden_dims=20)
+        self.joint_pos_policy = FullyConnectedPolicyEstimator(7,modular_policy_op_dims,hidden_dims=joint_pos_policy_hidden)
         # Define connecting Fc Linear layers.
-        self.fc1 = nn.Linear(20, 200)
-        self.fc3 = nn.Linear(200,action_dims)
+        input_tensor_dims = modular_policy_op_dims + 3 + 1
+        self.pre_pred_layer = nn.Linear(input_tensor_dims, hidden_pre_pred_dims)
+        self.output_layer = nn.Linear(hidden_pre_pred_dims,action_dims)
 
-    def forward(self,joint_pos,target_pos):
+    def forward(self,joint_pos,target_pos,gripper_open):
         joint_pos_op = self.joint_pos_policy(joint_pos)
-        target_pos_op = self.target_pos_policy(target_pos)
-        
         # option 1
-        # stacked_tensor : shape (batch_size,10+10)
+        # stacked_tensor : shape (batch_size,)
         # Output is combined into a single tensor.
-        stacked_tensor = torch.cat((joint_pos_op,target_pos_op),1)
+        stacked_tensor = torch.cat((joint_pos_op,target_pos,gripper_open),1)
         op = F.relu(self.fc1(stacked_tensor))
         op = self.fc3(op)
-
         return op
 
 
-class ActionModeEstimator(nn.Module):
-    def __init__(self):
-        super(ActionModeEstimator,self).__init__()
-        self.
 
 
 class ModularPolicyEstimator(nn.Module):
     def __init__(self):
         super(ModularPolicyEstimator,self).__init__()
-        self.gripper_open_estimator = None
-        self.action_mode_estimator = None
-
+        self.gripper_open_estimator = GripperOpenEstimator()
+        self.action_mode_estimator = ActionModeEstimator()
+        self.target_position_estimator = TargetPositionPolicy()
+    
+    def forward(self,EE_Pose,wrist_rgb,left_rgb,right_rgb,joint_positions):
+        gripper_open = self.gripper_open_estimator(EE_Pose,wrist_rgb)
+        target_position = self.target_position_estimator(left_rgb,right_rgb,gripper_open)
+        pred_action = self.action_mode_estimator(joint_positions,target_position,gripper_open)        
+        return gripper_open,pred_action,target_position
 
 
 
@@ -135,9 +150,10 @@ class OnPolicyAgent(TorchAgent):
         super(TorchAgent,self).__init__(collect_gradients=collect_gradients)
         self.learning_rate = learning_rate
         # action should contain 1 extra value for gripper open close state
-        self.neural_network = FullyConnectedPolicyEstimator(7,8)
+        self.neural_network = ModularPolicyEstimator()
         self.optimizer = optim.SGD(self.neural_network.parameters(), lr=learning_rate, momentum=0.9)
         self.loss_function = nn.SmoothL1Loss()
+
         self.training_data = None
         self.logger = logger.create_logger(__name__)
         self.logger.propagate = 0
@@ -165,7 +181,14 @@ class OnPolicyAgent(TorchAgent):
         self.data_loader = torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
 
     def get_train_vectors(self,demos:List[List[Observation]]):
-        return np.array([getattr(observation,'joint_positions') for episode in demos for observation in episode])
+        joint_pos_arr = np.array([getattr(observation,'joint_positions') for episode in demos for observation in episode])
+        # todo : Calculate Target pos Arra on basis  of the policy vector. 
+        left_shoulder_rgb = np.array([getattr(observation,'left_shoulder_rgb') for episode in demos for observation in episode])
+        right_shoulder_rgb = np.array([getattr(observation,'right_shoulder_rgb') for episode in demos for observation in episode])
+        wrist_rgb = np.array([getattr(observation,'wrist_rgb') for episode in demos for observation in episode])
+        
+
+
 
     def train_agent(self,epochs:int):
         if not self.dataset:
