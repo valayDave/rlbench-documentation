@@ -84,6 +84,7 @@ class GripperOpenEstimator(nn.Module):
 class TargetPositionPolicy(nn.Module):
 
     def __init__(self,image_impact_dims=2,pred_hidden_dims=50):
+        super(TargetPositionPolicy,self).__init__()
         self.l_rgb_conversion = ConvolutionalPolicyEstimator(image_impact_dims)
         self.r_rgb_conversion = ConvolutionalPolicyEstimator(image_impact_dims)
         self.pre_pred_layer = nn.Linear(image_impact_dims*2+1,pred_hidden_dims) # Because of gripper open 
@@ -101,7 +102,7 @@ class TargetPositionPolicy(nn.Module):
 class ActionModeEstimator(nn.Module):
     
     def __init__(self,action_dims=7,hidden_pre_pred_dims=30,joint_pos_policy_hidden=20):
-        super(ModularPolicyEstimator, self).__init__()
+        super(ActionModeEstimator, self).__init__()
         modular_policy_op_dims = 10
         # Define Modular Policy dimes
         self.joint_pos_policy = FullyConnectedPolicyEstimator(7,modular_policy_op_dims,hidden_dims=joint_pos_policy_hidden)
@@ -116,8 +117,8 @@ class ActionModeEstimator(nn.Module):
         # stacked_tensor : shape (batch_size,)
         # Output is combined into a single tensor.
         stacked_tensor = torch.cat((joint_pos_op,target_pos,gripper_open),1)
-        op = F.relu(self.fc1(stacked_tensor))
-        op = self.fc3(op)
+        op = F.relu(self.pre_pred_layer(stacked_tensor))
+        op = self.output_layer(op)
         return op
 
 
@@ -137,6 +138,45 @@ class ModularPolicyEstimator(nn.Module):
         return gripper_open,pred_action,target_position
 
 
+
+class ModularPolicyEstimator(nn.Module):
+    def __init__(self):
+        super(ModularPolicyEstimator,self).__init__()
+        self.gripper_open_estimator = GripperOpenEstimator()
+        self.action_mode_estimator = ActionModeEstimator()
+        self.target_position_estimator = TargetPositionPolicy()
+    
+    def forward(self,EE_Pose,wrist_rgb,left_rgb,right_rgb,joint_positions):
+        gripper_open = self.gripper_open_estimator(EE_Pose,wrist_rgb)
+        target_position = self.target_position_estimator(left_rgb,right_rgb,gripper_open)
+        pred_action = self.action_mode_estimator(joint_positions,target_position,gripper_open)        
+        return gripper_open,pred_action,target_position
+
+class ModularPolicyDataset(Dataset):
+    def __init__(self,EE_Pose_x,wrist_rgb_x,left_rgb_x,right_rgb_x,joint_positions_x,gripper_open,pred_action,target_position):
+        self.EE_Pose_x = EE_Pose_x
+        self.wrist_rgb_x = wrist_rgb_x
+        self.left_rgb_x = left_rgb_x
+        self.right_rgb_x = right_rgb_x
+        self.joint_positions_x = joint_positions_x
+        self.gripper_open = gripper_open
+        self.pred_action = pred_action
+        self.target_position = target_position
+        
+        
+    def __getitem__(self, index):
+        return (
+        self.EE_Pose_x[index],\
+        self.wrist_rgb_x[index],\
+        self.left_rgb_x[index],\
+        self.right_rgb_x[index],\
+        self.joint_positions_x[index],\
+        self.gripper_open[index],\
+        self.pred_action[index],\
+        self.target_position[index]),\
+
+    def __len__(self):
+        return len(self.EE_Pose_x) # of how many examples(images?) you have
 
 
 class OnPolicyAgent(TorchAgent):
@@ -164,30 +204,48 @@ class OnPolicyAgent(TorchAgent):
         self.batch_size =batch_size
 
     def injest_demonstrations(self,demos:List[List[Observation]],**kwargs):
-        joint_position_train_vector = torch.from_numpy(self.get_train_vectors(demos))
-        self.total_train_size = len(joint_position_train_vector)
+        joint_positions_x,left_rgb_x,right_rgb_x,wrist_rgb_x,EE_Pose_x = self.get_train_vectors(demos)
+        joint_positions_x = torch.from_numpy(joint_positions_x)
+        left_rgb_x = torch.from_numpy(left_rgb_x)
+        right_rgb_x = torch.from_numpy(right_rgb_x)
+        wrist_rgb_x = torch.from_numpy(wrist_rgb_x)
+        EE_Pose_x = torch.from_numpy(EE_Pose_x)
+
+        self.total_train_size = len(EE_Pose_x)
+        
         # $ First Extract the output_action. Meaning the action that will control the kinematics of the robot. 
-        ground_truth_velocities = np.array([getattr(observation,'joint_velocities') for episode in demos for observation in episode]) #
+        ground_truth_velocities = torch.from_numpy(np.array([getattr(observation,'joint_velocities') for episode in demos for observation in episode]))
         # $ Create a matrix for gripper position vectors.                                                                                                                                                     
         ground_truth_gripper_positions = np.array([getattr(observation,'gripper_open') for episode in demos for observation in episode])
-        # $ Final Ground truth Tensor will be [joint_velocities_0,...joint_velocities_6,gripper_open]
-        ground_truth_gripper_positions = ground_truth_gripper_positions.reshape(len(ground_truth_gripper_positions),1)
-        ground_truth = torch.from_numpy(np.concatenate((ground_truth_velocities,ground_truth_gripper_positions),axis=1))
+        ground_truth_gripper_positions = torch.from_numpy(ground_truth_gripper_positions.reshape(len(ground_truth_gripper_positions),1))
+
+        # todo : Calculate Target pos Arra on basis  of the policy vector. 
+        gt_target_position = torch.rand(len(ground_truth_gripper_positions),3)
         
         # demos[0][0].task_low_dim_state contains all target's coordinates
-        self.logger.info("Creating Tensordata for Pytorch of Size : %s"%str(joint_position_train_vector.size()))
-        self.dataset = torch.utils.data.TensorDataset(joint_position_train_vector, ground_truth)
+        self.logger.info("Creating Tensordata for Pytorch of Size : %s"%str(EE_Pose_x.size()))
+        
+        self.dataset = ModularPolicyDataset(
+            joint_positions_x, \
+            joint_positions_x, \
+            left_rgb_x, \
+            right_rgb_x, \
+            wrist_rgb_x, \
+            EE_Pose_x, \
+            ground_truth_gripper_positions,\
+            ground_truth_velocities,\
+            gt_target_position \
+        )
         
         self.data_loader = torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
 
     def get_train_vectors(self,demos:List[List[Observation]]):
-        joint_pos_arr = np.array([getattr(observation,'joint_positions') for episode in demos for observation in episode])
-        # todo : Calculate Target pos Arra on basis  of the policy vector. 
-        left_shoulder_rgb = np.array([getattr(observation,'left_shoulder_rgb') for episode in demos for observation in episode])
-        right_shoulder_rgb = np.array([getattr(observation,'right_shoulder_rgb') for episode in demos for observation in episode])
-        wrist_rgb = np.array([getattr(observation,'wrist_rgb') for episode in demos for observation in episode])
-        
-
+        joint_positions_x = np.array([getattr(observation,'joint_positions') for episode in demos for observation in episode])
+        left_rgb_x = np.array([getattr(observation,'left_shoulder_rgb') for episode in demos for observation in episode])
+        right_rgb_x = np.array([getattr(observation,'right_shoulder_rgb') for episode in demos for observation in episode])
+        wrist_rgb_x = np.array([getattr(observation,'wrist_rgb') for episode in demos for observation in episode])
+        EE_Pose_x = np.array([getattr(observation,'gripper_pose') for episode in demos for observation in episode])
+        return joint_positions_x,left_rgb_x,right_rgb_x,wrist_rgb_x,EE_Pose_x
 
 
     def train_agent(self,epochs:int):
@@ -196,22 +254,43 @@ class OnPolicyAgent(TorchAgent):
         
         self.logger.info("Starting Training of Agent ")
         self.neural_network.train()
+        final_loss = []
         for epoch in range(epochs):
             running_loss = 0.0
             steps = 0
-            for batch_idx, (data, target) in enumerate(self.data_loader):
-                data, target = Variable(data), Variable(target)
+            for batch_idx, \
+                (EE_Pose_x,\
+                wrist_rgb_x,\
+                left_rgb_x,\
+                right_rgb_x,\
+                joint_positions_x, \
+                gripper_open_y,\
+                pred_action_y,\
+                target_position_y) in enumerate(self.data_loader):
+
                 self.optimizer.zero_grad()
-                network_pred = self.neural_network(data.float()) 
-                loss = self.loss_function(network_pred,target.float())
-                loss.backward()
+                gripper_open,pred_action,target_position = self.neural_network(
+                            EE_Pose_x,\
+                            wrist_rgb_x,\
+                            left_rgb_x,\
+                            right_rgb_x,\
+                            joint_positions_x,\
+                    )
+                gripper_open_criterion = self.loss_function(gripper_open,gripper_open_y)
+                pred_action_criterion = self.loss_function(pred_action,pred_action_y)
+                target_position_criterion = self.loss_function(target_position,target_position_y)
+                total_loss = gripper_open_criterion + pred_action_criterion + target_position_criterion
+                total_loss.backward()
                 if self.collect_gradients:
                     self.set_gradients(self.neural_network.named_parameters())
                 self.optimizer.step()
-                running_loss += loss.item()
+                running_loss += total_loss.item()
                 steps+=1
-
+            
+            final_loss.append(float(running_loss))
             self.logger.info('[%d] loss: %.6f' % (epoch + 1, running_loss / (steps+1)))
+        
+        return final_loss
 
     def predict_action(self, demonstration_episode:List[Observation],**kwargs) -> np.array:
         self.neural_network.eval()
