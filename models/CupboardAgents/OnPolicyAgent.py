@@ -194,9 +194,9 @@ class OnPolicyAgent(TorchAgent):
         self.neural_network = ModularPolicyEstimator()
         self.optimizer = optim.SGD(self.neural_network.parameters(), lr=learning_rate, momentum=0.9)
         self.loss_function = nn.SmoothL1Loss()
-
+        self.agent_name = "GROCCERY_PICKING_COMPLEX_"+__class__.__name__
         self.training_data = None
-        self.logger = logger.create_logger(__name__)
+        self.logger = logger.create_logger(__class__.__name__)
         self.logger.propagate = 0
         self.input_state = 'joint_positions'
         self.output_action = 'joint_velocities'
@@ -333,7 +333,22 @@ class OnPolicyAgent(TorchAgent):
     def predict_action(self, demonstration_episode:List[Observation],**kwargs) -> np.array:
         self.neural_network.eval()
         train_vectors = self.get_train_vectors([demonstration_episode])
-        input_val = Variable(torch.from_numpy(train_vectors[0]))
-        output = self.neural_network(input_val.float())
-        return output.data.cpu().numpy()
+        joint_positions_x,left_rgb_x,right_rgb_x,wrist_rgb_x,EE_Pose_x = self.get_train_vectors([demonstration_episode])
+        joint_positions_x = torch.from_numpy(joint_positions_x)
+        left_rgb_x = torch.from_numpy(left_rgb_x)
+        right_rgb_x = torch.from_numpy(right_rgb_x)
+        wrist_rgb_x = torch.from_numpy(wrist_rgb_x)
+        EE_Pose_x = torch.from_numpy(EE_Pose_x)
+        
+        gripper_open,pred_action,target_position = self.neural_network(
+            EE_Pose_x.float(),\
+            wrist_rgb_x.float(),\
+            left_rgb_x.float(),\
+            right_rgb_x.float(),\
+            joint_positions_x.float(),\
+        )
+        gripper_open = gripper_open.data.cpu().numpy()
+        pred_action = pred_action.data.cpu().numpy()
+        action = np.concatenate((pred_action,gripper_open),1)
+        return action[0]
         # return np.random.uniform(size=(len(batch), 7))
