@@ -66,8 +66,8 @@ class TrainingSimulatorFlow(FlowSpec):
     @step
     def start(self):
         print("Importing data in this step")
-        self.num_demos=50
-        self.num_epochs=10 # Training epochs
+        self.num_demos=49
+        self.num_epochs=5 # Training epochs
         self.episode_length=100
         self.num_episodes=2 # Simulated Testing Epochs.
         self.variation_number = 0     

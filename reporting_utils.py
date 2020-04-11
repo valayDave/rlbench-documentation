@@ -58,6 +58,8 @@ def make_consolidated_loss_plot(final_data_arr:List[FinalData])->go.Figure:
     legend = []
     for i in range(len(final_data_arr)):
         loss_op = final_data_arr[i].loss
+        if loss_op is None:
+            continue
         agent_name = final_data_arr[i].agent_name
         epochs = [j+1 for j in range(len(loss_op))]
         loss_plot.add_trace(go.Scatter(
