@@ -46,12 +46,6 @@ class LearningAgent():
         """
         raise NotImplementedError()
 
-    def act(self,state:List[Observation],**kwargs):
-        """
-        This will be used by the RL agents and Learn from feadback from the environment. 
-        This will let pytorch hold gradients when running the network. 
-        """
-        raise NotImplementedError()
 
     def save_model(self,file_path):
         """
@@ -72,10 +66,40 @@ class LearningAgent():
         """
         raise NotImplementedError()
 
+
+class RLAgent(LearningAgent):
+    def __init__(self, **kwargs):
+        super(RLAgent,self).__init__(**kwargs)
+    
+    def update(self,replayBuffer:ReplayBuffer):
+
+        raise NotImplementedError()
+    
+    def update(self,state:List[Observation],reward:int):
+        """
+        This will be used by the RL agents and Learn from feadback from the environment. 
+        This will let pytorch DO GD basis rewards when running the network. 
+        
+        : state : This represent feedback from the environment. This will be state `s_t+1`.
+        : reward : Reward gained from taken action. 
+        """
+        raise NotImplementedError()
+    
+    def act(self,state:List[Observation],**kwargs):
+        """
+        This will be used by the RL agents to act on state `s_t`
+        This method will be used in coherance with `update` which will get `s_t+1` as input
+        This will let pytorch hold gradients when running the network. 
+
+        """
+        raise NotImplementedError()
+
+
+    
 class TorchAgent(LearningAgent):
 
-    def __init__(self,collect_gradeints = False):
-        super(LearningAgent,self).__init__(collect_gradeints=collect_gradeints)
+    def __init__(self,**kwargs):
+        super(TorchAgent,self).__init__(**kwargs)
 
     def save_model(self,file_path):
         if not self.neural_network:
@@ -108,3 +132,8 @@ class TorchAgent(LearningAgent):
         self.gradients['max'].append(max_grads)
         self.gradients['avg'].append(avg_grads)
         self.gradients['layer'].append(layers)
+
+
+class TorchRLAgent(TorchAgent,RLAgent):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
