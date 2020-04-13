@@ -209,6 +209,7 @@ class PutGrocceriesRLGraspingEnvironment(PutGroceriesEnvironment):
     def _get_state(self, obs:Observation,check_images=True):
         # _get_state function is present so that some alterations can be made to observations so that
         # dimensionality management is handled from lower level. 
+
         if not check_images: # This is set so that image loading can be avoided
             return self.set_object_pose(obs)
 
@@ -229,7 +230,7 @@ class PutGrocceriesRLGraspingEnvironment(PutGroceriesEnvironment):
     def set_object_pose(self,obs):
         # Add Object pose as a part of OBS.
         attr_name = 'object_poses'
-        setattr(obs,attr_name,self.get_object_poses)
+        setattr(obs,attr_name,self.get_object_poses())
         return obs
 
     def step(self, action):

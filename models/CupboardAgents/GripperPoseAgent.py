@@ -10,13 +10,48 @@ from typing import List
 import numpy as np
 from torch.utils.data.dataset import Dataset
 # Import Relative deps
+import quaternion
 import sys
 sys.path.append('..')
-from models.CupboardAgents.DDPG.ddpg import DDPG
+from models.CupboardAgents.DDPG.ddpg import DDPG,DDPGArgs
 from models.Agent import TorchRLAgent
 import logger
- 
 
+class GripperPoseDDPGNN():
+    """
+    GripperPoseDDPGNN : 
+        - 2 Sub DDPG Agents.
+            - Gripper Pose Agent
+            - Final XYZ Agent
+    """
+    def __init__(self):
+        self.postion_predictor = DDPG(7,3)
+        pose_args = DDPGArgs()
+        pose_args.bounding_min = 0
+        self.pose_predictor = DDPG(7,5,args=pose_args)
+    
+    def update(self):
+        self.postion_predictor.update_policy()
+        self.pose_predictor.update_policy()
+    
+    def observe(self, r_t, s_t1, done):
+        self.postion_predictor.observe(r_t,s_t1,done)    
+        self.pose_predictor.observe(r_t,s_t1,done)
+
+    def random_action(self):
+        postion_pred = self.postion_predictor.random_action()
+        pose_pred = self.pose_predictor.random_action()
+        quaternion_vals = quaternion.as_float_array(quaternion.as_quat_array(pose_pred[:-1]))
+        action = np.array(list(postion_pred)+list(quaternion_vals)+[pose_pred[-1]])
+        return action 
+
+    def select_action(self,s_t):
+        postion_pred = self.postion_predictor.select_action(s_t)
+        pose_pred = self.pose_predictor.select_action(s_t)
+        quaternion_vals = quaternion.as_float_array(quaternion.as_quat_array(pose_pred[:-1]))
+        action = np.array(list(postion_pred)+list(quaternion_vals)+[pose_pred[-1]])
+        return action 
+ 
 class GripperPoseRLAgent(TorchRLAgent):
     """
     GripperPoseRLAgent
@@ -33,14 +68,15 @@ class GripperPoseRLAgent(TorchRLAgent):
         https://math.stackexchange.com/questions/3179912/policy-gradient-reinforcement-learning-for-continuous-state-and-action-space
         https://ai.stackexchange.com/questions/4085/how-can-policy-gradients-be-applied-in-the-case-of-multiple-continuous-actions
 
-    TODO : FIX DDPG Action PREDS FOR Supporting allowed Quartienion Predictions
-    TODO : FIX DDPG To Support ACTION SPACE FOR XYZ Based on Robot's Workspace.
+    TODO : FIX/Transform DDPG Action PREDS FOR Supporting allowed Quartienion Predictions
+    TODO : FIX DDPG To Support ACTION SPACE FOR XYZ Based on Robot's Workspace. : self.task._task.boundary._boundaries[0]._boundary_bbox.min_x 
+    TODO 
     """
     def __init__(self,learning_rate = 0.001,batch_size=64,collect_gradients=False,warmup=1000):
         super(GripperPoseRLAgent,self).__init__(collect_gradients=collect_gradients,warmup=warmup)
         self.learning_rate = learning_rate
         # action should contain 1 extra value for gripper open close state
-        self.neural_network = DDPG(7,8)
+        self.neural_network = GripperPoseDDPGNN() # 2 DDPG Setup with Different Predictors. 
         self.agent_name ="DDPG__AGENT"
         self.logger = logger.create_logger(self.agent_name)
         self.logger.propagate = 0
@@ -72,6 +108,5 @@ class GripperPoseRLAgent(TorchRLAgent):
             action = self.neural_network.random_action()
         else:
             state = self.get_information_vector(state)
-            action = self.neural_network.select_action(state)
+            action = self.neural_network.select_action(state) # 8 Dim Vector
         return action
-

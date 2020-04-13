@@ -28,7 +28,8 @@ class DDPGArgs():
         self.ou_mu = 0.0 # noise mu
         self.ou_sigma= 0.2 # noises sigma
         self.rmsize = 6000000 # memory size
-
+        self.bounding_min=-1
+        self.bounding_max=1
 
 
 
@@ -75,6 +76,9 @@ class DDPG(object):
         self.s_t = None # Most recent state
         self.a_t = None # Most recent action
         self.is_training = True
+
+        self.bounding_min = args.bounding_min # To cap the action output of critique
+        self.bounding_max = args.bounding_max # To cap the action output of critique
 
         # 
         if USE_CUDA: self.cuda()
@@ -138,7 +142,7 @@ class DDPG(object):
 
     def random_action(self):
         # TODO : This is a problem. Need to Fix Action Spaces Here. 
-        action = np.random.uniform(-1.,1.,self.nb_actions)
+        action = np.random.uniform(self.bounding_min,self.bounding_max,self.nb_actions)
         self.a_t = action
         return action
 
@@ -148,7 +152,7 @@ class DDPG(object):
             self.actor(to_tensor(np.array([s_t])))
         ).squeeze(0)
         action += self.is_training*max(self.epsilon, 0)*self.random_process.sample()
-        action = np.clip(action, -1., 1.)
+        action = np.clip(action, self.bounding_min, self.bounding_max)
 
         if decay_epsilon:
             self.epsilon -= self.depsilon
