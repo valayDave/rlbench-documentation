@@ -31,6 +31,7 @@ class PutGroceriesEnvironment(SimulationEnvionment):
         self.num_episodes = num_episodes
         self.episode_length = episode_length
         self.logger = logger.create_logger(__class__.__name__)
+        self.logger.info("Setting Num Episodes %d"%num_episodes)
         self.logger.propagate = 0
 
 
@@ -175,11 +176,11 @@ class ReplayBuffer():
     1. Mofify RLBench to support Sensor reads at output. 
 
     2.Predict :: EEPose 
-    ACTION MODE : DELTA_EE_POSE 
+    ACTION MODE : ABS_EE_POSE_PLAN 
 """    
 
 class PutGrocceriesRLGraspingEnvironment(PutGroceriesEnvironment):
-    def __init__(self, action_mode=ArmActionMode.DELTA_EE_POSE, headless=True, num_episodes=120, episode_length=40, dataset_root=''):
+    def __init__(self, action_mode=ActionMode(ArmActionMode.ABS_EE_POSE_PLAN), headless=True, num_episodes=100, episode_length=1000, dataset_root=''):
         super().__init__(action_mode=action_mode, headless=headless, num_episodes=num_episodes, episode_length=episode_length, dataset_root=dataset_root)
         self.obj_pose_sensor = NoisyObjectPoseSensor(self.env)
         # TODO : Set Reward Based Proximity Sensors IN our Environment.
@@ -238,8 +239,35 @@ class PutGrocceriesRLGraspingEnvironment(PutGroceriesEnvironment):
         return state_obs, shaped_reward, terminate
 
 
+    def train_rl_agent(self,agent:RLAgent):
+        replay_buffer = ReplayBuffer()
+        total_steps = 0
+        for episode_i in range(self.num_episodes):
+            obs,descriptions = self.task_reset()
+            prev_obs = obs
+            for step_counter in range(self.episode_length): # Iterate for each timestep in Episode length
+                total_steps+=1
+                action = agent.act([prev_obs],timestep=step_counter) # Provide state s_t to agent.
+                selected_action = action
+                print(selected_action)
+                new_obs, reward, terminate = self.step(selected_action)
+
+                if step_counter == self.episode_length-1:
+                    terminate = True # setting termination here becuase failed trajectory. 
+                agent.observe([new_obs],action,reward,terminate) # s_t+1,a_t,reward_t : This should also be thought out.
+                prev_obs = new_obs
+                replay_buffer.total_reward+=reward
+                if total_steps > agent.warmup:
+                    agent.update()
+                if terminate:
+                    self.logger.info("Terminating!!")
+                    break
+            self.logger.info("Total Reward Gain For all Epsiodes : %d"%replay_buffer.total_reward)
+
+
     def run_rl_episode(self,agent:RLAgent) -> ReplayBuffer:
         """
+        DEPRICATED
         This function should be used under the following assumption 
         
         1.  You care about total reward attained For the epsiode instead of the rewards at time steps.

@@ -68,29 +68,31 @@ class LearningAgent():
 
 
 class RLAgent(LearningAgent):
-    def __init__(self, **kwargs):
+    def __init__(self,warmup=500, **kwargs):
+        self.warmup = warmup
+        self.is_training = False
         super(RLAgent,self).__init__(**kwargs)
     
-    def update(self,replayBuffer:ReplayBuffer):
-
+    def observe(self,state_t1:List[Observation],action_t,reward_t:int,done:bool):
+        """
+        This is for managing replay storing. 
+        Will be called after agent takes step and reward is recorded from the env. 
+        This will get state: s_t+1,a_t,r_t
+        """
         raise NotImplementedError()
     
-    def update(self,state:List[Observation],reward:int):
+    def update(self):
         """
-        This will be used by the RL agents and Learn from feadback from the environment. 
+        This will be used by the RL agents to actually Update the Policy. 
         This will let pytorch DO GD basis rewards when running the network. 
-        
-        : state : This represent feedback from the environment. This will be state `s_t+1`.
-        : reward : Reward gained from taken action. 
         """
         raise NotImplementedError()
     
     def act(self,state:List[Observation],**kwargs):
         """
         This will be used by the RL agents to act on state `s_t`
-        This method will be used in coherance with `update` which will get `s_t+1` as input
+        This method will be used in coherance with `observe` which will get `s_t+1` as input
         This will let pytorch hold gradients when running the network. 
-
         """
         raise NotImplementedError()
 
