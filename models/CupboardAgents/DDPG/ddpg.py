@@ -94,7 +94,7 @@ class DDPG(object):
             self.actor_target(to_tensor(next_state_batch, volatile=True)),
         ])
         next_q_values.volatile=False
-
+        # TODO CHANGE volatile=False TO torch.no_grad() form because volatile=False doesnt work anymore.  
         target_q_batch = to_tensor(reward_batch) + \
             self.discount*to_tensor(terminal_batch.astype(np.float))*next_q_values
 

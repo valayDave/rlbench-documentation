@@ -96,6 +96,12 @@ class RLAgent(LearningAgent):
         """
         raise NotImplementedError()
 
+    def reset(self,state:List[Observation],**kwargs):
+        """
+        This will reset the state on termination of an episode. 
+        This will ensure that agent captures termination conditions of completion
+        """
+        raise NotImplementedError()
 
     
 class TorchAgent(LearningAgent):

@@ -23,9 +23,15 @@ class GripperPoseDDPGNN():
         - 2 Sub DDPG Agents.
             - Gripper Pose Agent
             - Final XYZ Agent
+        $ CHANGES
+            $ 1. 1 DDPG Agent with Normalised Quaternion : Raate
+            $ 2. Reward function setup : @kadu 
+                $ 2.1 Integrate Task into PutGrocceriesEnv. 
+            $ 3. Mix and Experment. 
+                $ 3.1 4000 Episodes. : MAX_STEPS 
     """
     def __init__(self):
-        self.postion_predictor = DDPG(7,3)
+        self.postion_predictor = DDPG(7,8)
         pose_args = DDPGArgs()
         pose_args.bounding_min = 0
         self.pose_predictor = DDPG(7,5,args=pose_args)
@@ -48,7 +54,8 @@ class GripperPoseDDPGNN():
     def select_action(self,s_t):
         postion_pred = self.postion_predictor.select_action(s_t)
         pose_pred = self.pose_predictor.select_action(s_t)
-        quaternion_vals = quaternion.as_float_array(quaternion.as_quat_array(pose_pred[:-1]))
+        quaternion_vals = np.array(quaternion.as_float_array(quaternion.as_quat_array(pose_pred[:-1])))
+        quaternion_vals = quaternion_vals / np.linalg.norm(quaternion_vals)
         action = np.array(list(postion_pred)+list(quaternion_vals)+[pose_pred[-1]])
         return action 
  
@@ -72,11 +79,11 @@ class GripperPoseRLAgent(TorchRLAgent):
     TODO : FIX DDPG To Support ACTION SPACE FOR XYZ Based on Robot's Workspace. : self.task._task.boundary._boundaries[0]._boundary_bbox.min_x 
     TODO 
     """
-    def __init__(self,learning_rate = 0.001,batch_size=64,collect_gradients=False,warmup=1000):
+    def __init__(self,learning_rate = 0.001,batch_size=64,collect_gradients=False,warmup=10):
         super(GripperPoseRLAgent,self).__init__(collect_gradients=collect_gradients,warmup=warmup)
         self.learning_rate = learning_rate
         # action should contain 1 extra value for gripper open close state
-        self.neural_network = GripperPoseDDPGNN() # 2 DDPG Setup with Different Predictors. 
+        self.neural_network = DDPG(7,8) # 1 DDPG Setup with Different Predictors. 
         self.agent_name ="DDPG__AGENT"
         self.logger = logger.create_logger(self.agent_name)
         self.logger.propagate = 0
@@ -93,11 +100,17 @@ class GripperPoseRLAgent(TorchRLAgent):
         return demonstration_episode[0].object_poses[self.desired_obj]
 
     def observe(self,state_t1:List[Observation],action_t,reward_t:int,done:bool):
-        state_t1 = self.get_information_vector(state_t1)
+        """
+        State s_t1 can be None because of errors thrown by policy. 
+        """
+        state_t1 = None if state_t1[0] is None else self.get_information_vector(state_t1)
         self.neural_network.observe(reward_t,state_t1,done)
     
     def update(self):
         self.neural_network.update_policy()
+
+    def reset(self,state:List[Observation]):
+        self.neural_network.reset(self.get_information_vector(state))
 
     def act(self,state:List[Observation],timestep=0):
         """
@@ -109,4 +122,8 @@ class GripperPoseRLAgent(TorchRLAgent):
         else:
             state = self.get_information_vector(state)
             action = self.neural_network.select_action(state) # 8 Dim Vector
+        
+        quaternion_vals = np.array(action[3:-1]) # Normalising Quaternion values. 
+        quaternion_vals = quaternion_vals / np.linalg.norm(quaternion_vals)
+        action = np.array(list(action[:3])+list(quaternion_vals)+[action[-1]])
         return action

@@ -19,7 +19,7 @@ def to_numpy(var):
     return var.cpu().data.numpy() if USE_CUDA else var.data.numpy()
 
 def to_tensor(ndarray, volatile=False, requires_grad=False, dtype=FLOAT):
-    return Tensor(
+    return Variable(
         torch.from_numpy(ndarray), volatile=volatile, requires_grad=requires_grad
     ).type(dtype)
 

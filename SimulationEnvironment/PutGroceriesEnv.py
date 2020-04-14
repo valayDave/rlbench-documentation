@@ -16,8 +16,6 @@ sys.path.append('..')
 from models.Agent import LearningAgent,RLAgent
 import logger
 
-
-
 class PutGroceriesEnvironment(SimulationEnvionment):
     """
     Inherits the `SimulationEnvironment` class. 
@@ -185,9 +183,11 @@ class PutGrocceriesRLGraspingEnvironment(PutGroceriesEnvironment):
         self.obj_pose_sensor = NoisyObjectPoseSensor(self.env)
         # TODO : Set Reward Based Proximity Sensors IN our Environment.
 
+    #IMP
     def get_object_poses(self):
         return self.obj_pose_sensor.get_poses()
 
+    # IMP
     def reward_function(self,state:Observation,action,rlbench_reward:int):
         """
         reward_function : Reward function for non Sparse Rewards. 
@@ -206,6 +206,7 @@ class PutGrocceriesRLGraspingEnvironment(PutGroceriesEnvironment):
         return 0
 
 
+    #IMP
     def _get_state(self, obs:Observation,check_images=True):
         # _get_state function is present so that some alterations can be made to observations so that
         # dimensionality management is handled from lower level. 
@@ -227,34 +228,46 @@ class PutGrocceriesRLGraspingEnvironment(PutGroceriesEnvironment):
 
         return self.set_object_pose(obs)
     
+    #IMP
     def set_object_pose(self,obs):
         # Add Object pose as a part of OBS.
         attr_name = 'object_poses'
         setattr(obs,attr_name,self.get_object_poses())
         return obs
-
+    
+    #IMP
     def step(self, action):
-        obs_, reward, terminate = self.task.step(action)  # reward in original rlbench is binary for success or not
-        state_obs = self._get_state(obs_)
-        shaped_reward = self.reward_function(state_obs,action,reward)
-        return state_obs, shaped_reward, terminate
+        error = None
+        state_obs = None
+        try:
+            obs_, reward, terminate = self.task.step(action)  # reward in original rlbench is binary for success or not
+            state_obs = self._get_state(obs_)
+            shaped_reward = self.reward_function(state_obs,action,reward)
+            return state_obs, shaped_reward, terminate
+        except Exception as e:
+            self.logger.warn("Agent Spit Out Error")
+            error = e
+            print(e)
+            return None,0,True
 
-
+    # IMP
     def train_rl_agent(self,agent:RLAgent):
         replay_buffer = ReplayBuffer()
         total_steps = 0
         for episode_i in range(self.num_episodes):
             obs,descriptions = self.task_reset()
             prev_obs = obs
+            agent.reset([obs]) # Reset to Rescue for resetting s_t in agent on failure
             for step_counter in range(self.episode_length): # Iterate for each timestep in Episode length
                 total_steps+=1
                 action = agent.act([prev_obs],timestep=step_counter) # Provide state s_t to agent.
                 selected_action = action
                 print(selected_action)
                 new_obs, reward, terminate = self.step(selected_action)
-
                 if step_counter == self.episode_length-1:
                     terminate = True # setting termination here becuase failed trajectory. 
+                # ! In case of failure the step function will return NONE
+                # ! The agent will have to handle None state as reward and terminate are passed.
                 agent.observe([new_obs],action,reward,terminate) # s_t+1,a_t,reward_t : This should also be thought out.
                 prev_obs = new_obs
                 replay_buffer.total_reward+=reward
@@ -264,30 +277,3 @@ class PutGrocceriesRLGraspingEnvironment(PutGroceriesEnvironment):
                     self.logger.info("Terminating!!")
                     break
             self.logger.info("Total Reward Gain For all Epsiodes : %d"%replay_buffer.total_reward)
-
-
-    def run_rl_episode(self,agent:RLAgent) -> ReplayBuffer:
-        """
-        DEPRICATED
-        This function should be used under the following assumption 
-        
-        1.  You care about total reward attained For the epsiode instead of the rewards at time steps.
-            Hence the `predict_action` function is used here which is not ment for any gradient flow.
-            ReplayBuffer is returned which hold whole episode and rewards at each Timestep.
-        """        
-        # obs_traj = 
-        replay_buffer = ReplayBuffer()
-        obs,descriptions = self.task_reset()
-        prev_obs = obs
-        for step_counter in range(self.episode_length): # Iterate for each timestep in Episode length
-            action = agent.predict_action([obs],time_step=step_counter) # Provide state s_t to agent.
-            selected_action = action
-            obs, reward, terminate = self.step(selected_action)
-            replay_buffer.store(prev_obs,action,reward) # s_t,a_t,reward_t : This should also be thought out.
-            replay_buffer.total_reward+=reward
-            prev_obs = obs
-            if terminate:
-                self.logger.info("Terminating!!")
-                break
-
-        return replay_buffer
