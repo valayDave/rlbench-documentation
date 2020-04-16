@@ -92,7 +92,7 @@ class GripperPoseRLAgent(TorchRLAgent):
         self.data_loader = None
         self.dataset = None
         self.batch_size =batch_size
-        self.desired_obj = 'chocolate_jello_grasp_point'
+        self.desired_obj = 'soup_grasp_point'
         self.print_every = 40
    
     

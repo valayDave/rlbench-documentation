@@ -88,33 +88,31 @@ class DDPG(object):
         state_batch, action_batch, reward_batch, \
         next_state_batch, terminal_batch = self.memory.sample_and_split(self.batch_size)
 
-        # Prepare for the target q batch
+        state_tensor,action_tensor = to_tensor(state_batch), to_tensor(action_batch)
+        # Prepare for the target q batch Or Expected State-Action Value
+        next_state_tensor = to_tensor(next_state_batch)
+        actor_batch_op = self.actor_target(next_state_tensor)
         next_q_values = self.critic_target([
-            to_tensor(next_state_batch, volatile=True),
-            self.actor_target(to_tensor(next_state_batch, volatile=True)),
+            next_state_tensor,
+            actor_batch_op.detach(), #  It detaches the output from the computational graph. So no gradient will be backpropagated along this variable.
         ])
-        next_q_values.volatile=False
-        # TODO CHANGE volatile=False TO torch.no_grad() form because volatile=False doesnt work anymore.  
-        target_q_batch = to_tensor(reward_batch) + \
-            self.discount*to_tensor(terminal_batch.astype(np.float))*next_q_values
+        terminal_tensor = to_tensor(terminal_batch.astype(np.float),requires_grad=False)
+        expected_q_values = to_tensor(reward_batch) + \
+            self.discount*terminal_tensor*next_q_values
 
-        # Critic update
-        self.critic.zero_grad()
-
-        q_batch = self.critic([ to_tensor(state_batch), to_tensor(action_batch) ])
-        
-        value_loss = self.criterion(q_batch, target_q_batch)
+        # Critic update Basis Value loss from Expected Q Values with Computed Q Values
+        self.critic_optim.zero_grad()
+        computed_q_values= self.critic([state_tensor,action_tensor ])
+        value_loss = self.criterion(computed_q_values, expected_q_values)
         value_loss.backward()
         self.critic_optim.step()
 
         # Actor update
-        self.actor.zero_grad()
-
+        self.actor_optim.zero_grad()
         policy_loss = -self.critic([
             to_tensor(state_batch),
             self.actor(to_tensor(state_batch))
         ])
-
         policy_loss = policy_loss.mean()
         policy_loss.backward()
         self.actor_optim.step()
