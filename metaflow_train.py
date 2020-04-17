@@ -17,6 +17,15 @@ class FinalData():
         }
     
     def __str__(self):
+       return self._get_parsed_data('str')
+    
+    def to_json(self):
+       return self._get_parsed_data('json')
+
+    def _get_parsed_data(self,type_var='str'):
+        """
+        Can parse to string for printing or to json for conversion
+        """
         num_convergence_metrics = len(self.simulation_analytics['convergence_metrics'])
         percent_converge = (len(self.simulation_analytics['convergence_metrics']) / self.simulation_analytics['total_epochs_allowed'])*100
         data_size = 0
@@ -32,34 +41,40 @@ class FinalData():
             if len(self.gradients['avg']) > 0:
                 collected_grads = 'Yes'
 
-        x = '''
-        Agent Name : {agent_name}
+        arg_dict =  dict(agent_name=self.agent_name,\
+                        total_episodes=str(self.simulation_analytics['total_epochs_allowed']),\
+                        steps=str(self.simulation_analytics['max_steps_per_episode']),\
+                        num_convergence_metrics=str(num_convergence_metrics), \
+                        percent_converge=str(percent_converge), \
+                        model_args=json.dumps(model_args), \
+                        data_size="NO DATA" if data_size is 0 else str(data_size),
+                        grad_collect=collected_grads)
+        if type_var == 'str':
+            x = '''
+            Agent Name : {agent_name}
 
-        Total Training Data Size : {data_size}
+            Total Training Data Size : {data_size}
 
-        Model Arguements : {model_args}
+            Model Arguements : {model_args}
 
-        Collected Gradients : {grad_collect}
+            Collected Gradients : {grad_collect}
 
-        Simulation Results 
+            Simulation Results 
 
-            Total Number of Episodes : {total_episodes}
+                Total Number of Episodes : {total_episodes}
 
-            Steps Per Episode : {steps}
+                Steps Per Episode : {steps}
 
-            Number Of Converged Cases : {num_convergence_metrics}
+                Number Of Converged Cases : {num_convergence_metrics}
 
-            %  Cases That Converged : {percent_converge}
-        '''.format(agent_name=self.agent_name,\
-            total_episodes=str(self.simulation_analytics['total_epochs_allowed']),\
-            steps=str(self.simulation_analytics['max_steps_per_episode']),\
-            num_convergence_metrics=str(num_convergence_metrics), \
-            percent_converge=str(percent_converge), \
-            model_args=json.dumps(model_args), \
-            data_size="NO DATA" if data_size is 0 else str(data_size),
-            grad_collect=collected_grads
-            )
-        return x
+                %  Cases That Converged : {percent_converge}
+            '''.format(**arg_dict)
+            return x
+        elif type_var == 'json':
+            return arg_dict
+        else:
+            raise Exception("Not Supported Parsing Type")
+        
 
 class TrainingSimulatorFlow(FlowSpec):
 
