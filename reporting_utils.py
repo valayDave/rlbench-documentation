@@ -228,3 +228,16 @@ def safe_mkdir(path):
         os.mkdir(path)
     except OSError:
         pass
+
+
+def get_run_stats(min_num_epochs=100,min_demos=100):
+    save_objs = [] 
+    for run in Flow('TrainingSimulatorFlow').runs():
+        if not run.finished:
+            continue
+        flow_init_datum = list(run.steps())[-1].task.data 
+        if flow_init_datum.num_demos >= min_demos and flow_init_datum.num_epochs >= min_num_epochs: 
+            nw_objs = [data.to_json()for data in run.data.final_data] # capture flows > 100 demos/ 100 epochs. 
+            save_objs = save_objs + nw_objs
+    
+    return save_objs
