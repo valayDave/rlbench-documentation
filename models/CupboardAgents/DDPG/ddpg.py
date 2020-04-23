@@ -87,8 +87,8 @@ class DDPG(object):
         # Sample batch
         state_batch, action_batch, reward_batch, \
         next_state_batch, terminal_batch = self.memory.sample_and_split(self.batch_size)
-
-        state_tensor,action_tensor = to_tensor(state_batch), to_tensor(action_batch)
+        state_tensor = to_tensor(np.array(state_batch),dtype=torch.float)
+        action_tensor =  to_tensor(np.array(action_batch),dtype=torch.float)
         # Prepare for the target q batch Or Expected State-Action Value
         next_state_tensor = to_tensor(next_state_batch)
         actor_batch_op = self.actor_target(next_state_tensor)
