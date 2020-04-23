@@ -52,7 +52,7 @@ image_types=[
 
 DEFAULT_ACTION_MODE = ActionMode(ArmActionMode.ABS_JOINT_VELOCITY)
 DEFAULT_TASK = ReachTarget
-class SimulationEnvionment():
+class SimulationEnvironment():
     """
     This can be a parent class from which we can have multiple child classes that 
     can diversify for different tasks and deeper functions within the tasks.
@@ -104,7 +104,7 @@ class SimulationEnvionment():
        raise NotImplementedError()
 
 
-class ReachTargetSimulationEnv(SimulationEnvionment):
+class ReachTargetSimulationEnv(SimulationEnvironment):
     """
     Inherits the `SimulationEnvironment` class. 
     This environment is specially ment for running traing agent for ReachTarget Task. 
