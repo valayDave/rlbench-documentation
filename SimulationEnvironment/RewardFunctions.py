@@ -8,7 +8,7 @@ class RewardFunction():
         raise NotImplementedError()
 
     def __str__(self):
-        return __class__.__name__
+        return self.__class__.__name__
 
 class MahattanReward(RewardFunction):
     """
