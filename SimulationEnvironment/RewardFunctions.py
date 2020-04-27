@@ -1,11 +1,14 @@
 import numpy as np
-from rlbench.backend.observation import O
+from rlbench.backend.observation import Observation
 '''
 Reward Functions
 '''
 class RewardFunction():
     def __call__(self,env, state:Observation, action, rl_bench_reward):
         raise NotImplementedError()
+
+    def __str__(self):
+        return __class__.__name__
 
 class MahattanReward(RewardFunction):
     """
