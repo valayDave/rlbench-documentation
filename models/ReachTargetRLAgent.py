@@ -298,6 +298,7 @@ class ReachTargetRLAgent(TorchRLAgent):
         https://math.stackexchange.com/questions/3179912/policy-gradient-reinforcement-learning-for-continuous-state-and-action-space
         https://ai.stackexchange.com/questions/4085/how-can-policy-gradients-be-applied-in-the-case-of-multiple-continuous-actions
 
+    TODO : ADD SAVE AND LOAD MODEL METHODS TO ACCOMODATE DDPG.
     """
     def __init__(self,collect_gradients=False,warmup=50,ddpg_args=DDPGArgs(),input_states=['joint_velocities','task_low_dim_state']):
         super(ReachTargetRLAgent,self).__init__(collect_gradients=collect_gradients,warmup=warmup)
@@ -314,7 +315,7 @@ class ReachTargetRLAgent(TorchRLAgent):
         self.dataset = None
         self.print_every = 40
         self.curr_state = None
-        self.logger.info("Agent Wired With Input States : %s",''.join(self.input_states))
+        self.logger.info("Agent Wired With Input States : %s",','.join(self.input_states))
    
     
     def get_information_vector(self,demonstration_episode:List[Observation]):

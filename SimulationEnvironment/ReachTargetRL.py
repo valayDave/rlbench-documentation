@@ -33,6 +33,58 @@ class ReplayBuffer():
 DEFAULT_ACTION_MODE = ActionMode(ArmActionMode.ABS_JOINT_VELOCITY)
 DEFAULT_TASK = ReachTarget
 
+class EpisodeRewardBuffer():
+    def __init__(self,rewards = [],completed = False):
+        self.rewards = rewards
+        self.completed = completed
+
+    def add(self,reward):
+        self.rewards.append(reward)        
+
+    @property
+    def total(self):
+        return sum(self.rewards)
+
+    def to_json(self):
+        return {
+            'rewards':self.rewards,
+            'completed':self.completed
+        }
+
+class RLMetrics():
+    def __init__(self,episiode_rewards = []):
+        self.episode_rewards = episiode_rewards # [EpisodeRewardBuffer]
+    
+    def get_new_reward_buffer(self):
+        buffer = EpisodeRewardBuffer()
+        self.episode_rewards.append(buffer)
+        return buffer
+    
+    def __len__(self):
+        return len(self.episode_rewards)
+    
+    @property
+    def total_reward(self):
+        return sum([e.total for e in self.episode_rewards])
+    
+    def to_json(self):
+        return [e.to_json for e in self.episode_rewards]
+
+    def __str__(self):
+        total_rewards = sum([e.total for e in self.episode_rewards])
+        print_args = {
+            'total_rewards' : str(total_rewards),
+            'num_episodes':str(len(self.episode_rewards)),
+            'avg_reward':str(total_rewards/len(self.episode_rewards))
+        }
+        return '''
+        Total Rewards : {total_rewards}
+
+        Number of Episodes : {num_episodes}
+
+        Average Reward/Episode : {avg_reward}
+        '''.format(**print_args)
+         
 
 class ReachTargetRLEnvironment(SimulationEnvironment):
     
@@ -81,14 +133,14 @@ class ReachTargetRLEnvironment(SimulationEnvironment):
     def step(self, action):
         error = None
         state_obs = None
-        obs_, reward, terminate = self.task.step(action)  # reward in original rlbench is binary for success or not
+        obs_, rl_bench_reward, terminate = self.task.step(action)  # reward in original rlbench is binary for success or not
         state_obs = self._get_state(obs_)
-        shaped_reward = self.reward_function(self,state_obs,action,reward)
-        return state_obs, shaped_reward, terminate
+        shaped_reward = self.reward_function(self,state_obs,action,rl_bench_reward)
+        return state_obs, shaped_reward, terminate,rl_bench_reward
 
     # IMP
     def train_rl_agent(self,agent:RLAgent):
-        replay_buffer = ReplayBuffer()
+        replay_buffer = RLMetrics()
         total_steps = 0 # Total Steps of all Episodes.
         valid_steps = 0 # Valid steps predicted by the agent
 
@@ -97,23 +149,28 @@ class ReachTargetRLEnvironment(SimulationEnvironment):
             prev_obs = obs
             agent.reset([self._get_state(obs)]) # Reset to Rescue for resetting s_t in agent on failure
             step_counter = 0 # A counter of valid_steps within episiode
-
+            reward_buffer = replay_buffer.get_new_reward_buffer()
             while step_counter < self.episode_length:
             # for step_counter in range(self.episode_length): # Iterate for each timestep in Episode length
                 total_steps+=1
                 action = agent.act([prev_obs],timestep=step_counter) # Provide state s_t to agent.
                 selected_action = action
-                new_obs, reward, terminate = self.step(selected_action)
+                new_obs, reward, terminate,rl_bench_reward = self.step(selected_action)
+                reward_buffer.add(reward)
+                if rl_bench_reward == 1:
+                    self.logger.info("Reached Goal!!")
+                    reward_buffer.completed = True
                 step_counter+=1                
                 agent.observe([new_obs],action,reward,terminate) # s_t+1,a_t,reward_t : This should also be thought out.
-                prev_obs = new_obs
-                replay_buffer.total_reward+=reward
+                prev_obs = new_obs           
                 if step_counter == self.episode_length-1:
+                    self.logger.info("Terminating on Max Steps!!")
                     terminate = True # setting termination here becuase failed trajectory. 
                 
                 if valid_steps > agent.warmup:
                     agent.update()
                 if terminate:
-                    self.logger.info("Terminating!!")
                     break
             self.logger.info("Total Reward Gain For all Epsiodes : %d"%replay_buffer.total_reward)
+        
+        return replay_buffer
