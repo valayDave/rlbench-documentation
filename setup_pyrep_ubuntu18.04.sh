@@ -4,7 +4,7 @@ tar -xvf CoppeliaSim_Edu_V4_0_0_Ubuntu18_04.tar.xz
 rm CoppeliaSim_Edu_V4_0_0_Ubuntu18_04.tar.xz
 echo "V-Rep/CoppeliaSim Downloaded. Downloading PyRep"
 git clone https://github.com/stepjam/PyRep.git
-git clone https://github.com/stepjam/RLBench.git
+git clone https://github.com/valayDave/RLBench.git
 echo "Installing Virtual Environment"
 python3 -m venv .env
 echo "Installing PyRep and RLBench in Virtual Environment"
