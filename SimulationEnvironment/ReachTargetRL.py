@@ -16,7 +16,7 @@ import sys
 sys.path.append('..')
 from models.Agent import LearningAgent,RLAgent
 import logger
-
+from Utilities.core import *
 class ReplayBuffer():
     
     def __init__(self):
@@ -32,60 +32,7 @@ class ReplayBuffer():
 
 DEFAULT_ACTION_MODE = ActionMode(ArmActionMode.ABS_JOINT_VELOCITY)
 DEFAULT_TASK = ReachTarget
-
-class EpisodeRewardBuffer():
-    def __init__(self,rewards = [],completed = False):
-        self.rewards = rewards
-        self.completed = completed
-
-    def add(self,reward):
-        self.rewards.append(reward)        
-
-    @property
-    def total(self):
-        return sum(self.rewards)
-
-    def to_json(self):
-        return {
-            'rewards':self.rewards,
-            'completed':self.completed
-        }
-
-class RLMetrics():
-    def __init__(self,episiode_rewards = []):
-        self.episode_rewards = episiode_rewards # [EpisodeRewardBuffer]
-    
-    def get_new_reward_buffer(self):
-        buffer = EpisodeRewardBuffer()
-        self.episode_rewards.append(buffer)
-        return buffer
-    
-    def __len__(self):
-        return len(self.episode_rewards)
-    
-    @property
-    def total_reward(self):
-        return sum([e.total for e in self.episode_rewards])
-    
-    def to_json(self):
-        return [e.to_json for e in self.episode_rewards]
-
-    def __str__(self):
-        total_rewards = sum([e.total for e in self.episode_rewards])
-        print_args = {
-            'total_rewards' : str(total_rewards),
-            'num_episodes':str(len(self.episode_rewards)),
-            'avg_reward':str(total_rewards/len(self.episode_rewards))
-        }
-        return '''
-        Total Rewards : {total_rewards}
-
-        Number of Episodes : {num_episodes}
-
-        Average Reward/Episode : {avg_reward}
-        '''.format(**print_args)
          
-
 class ReachTargetRLEnvironment(SimulationEnvironment):
     
     def __init__(self,
@@ -139,7 +86,7 @@ class ReachTargetRLEnvironment(SimulationEnvironment):
         return state_obs, shaped_reward, terminate,rl_bench_reward
 
     # IMP
-    def train_rl_agent(self,agent:RLAgent):
+    def train_rl_agent(self,agent:RLAgent,eval_mode=False):
         replay_buffer = RLMetrics()
         total_steps = 0 # Total Steps of all Episodes.
         valid_steps = 0 # Valid steps predicted by the agent
@@ -167,7 +114,7 @@ class ReachTargetRLEnvironment(SimulationEnvironment):
                     self.logger.info("Terminating on Max Steps!!")
                     terminate = True # setting termination here becuase failed trajectory. 
                 
-                if valid_steps > agent.warmup:
+                if valid_steps > agent.warmup and not eval_mode:
                     agent.update()
                 if terminate:
                     break

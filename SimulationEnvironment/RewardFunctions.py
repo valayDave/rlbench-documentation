@@ -62,7 +62,7 @@ class EuclideanReward(RewardFunction):
         target_pose=np.array([getattr(state,'task_low_dim_state')])
 
         distance =np.sqrt((target_pose[0,0]-ee_pose[0,0])**2+(target_pose[0,1]-ee_pose[0,1])**2+(target_pose[0,2]-ee_pose[0,2])**2)
-        reward=np.tanh(distance)
+        reward=np.tanh(1/distance)
         return reward
 
 class ExponentialEuclideanReward(RewardFunction):
@@ -77,7 +77,7 @@ class ExponentialEuclideanReward(RewardFunction):
         ee_pose=np.array([getattr(state,'gripper_pose')[:3]])
         target_pose=np.array([getattr(state,'task_low_dim_state')])
         distance =np.sqrt((target_pose[0,0]-ee_pose[0,0])**2+(target_pose[0,1]-ee_pose[0,1])**2+(target_pose[0,2]-ee_pose[0,2])**2)
-        reward=np.exp(distance)
+        reward=np.exp(1/distance)
         return reward
 
 class HuberReward(RewardFunction):

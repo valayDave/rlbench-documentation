@@ -192,6 +192,30 @@ class DDPG(object):
 
         self.update_network_parameters(tau=1)
 
+    def to_object(self):
+        networks = {
+            'target':{
+                'actor':self.target_actor.state_dict(),
+                'critic':self.target_critic.state_dict()
+            },
+            'pred':{
+               'actor':self.actor.state_dict(),
+                'critic':self.critic.state_dict()
+            }
+        }
+        return networks
+    
+    def from_object(self,nw_object):
+        if 'target' not in nw_object or 'pred' not in nw_object:
+            raise Exception("No Target Or Prediction Network as Properties")
+        self.target_actor.load_state_dict(nw_object['target']['actor'])
+        self.target_critic.load_state_dict(nw_object['target']['critic'])
+        self.actor.load_state_dict(nw_object['pred']['actor'])
+        self.critic.load_state_dict(nw_object['pred']['critic'])
+        print("Model Loaded!")
+        
+
+
     def select_action(self, observation):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float).to(self.actor.device)
@@ -336,7 +360,13 @@ class ReachTargetRLAgent(TorchRLAgent):
     def reset(self,state:List[Observation]):
         self.curr_state = self.get_information_vector(state)
         # self.neural_network.reset(self.get_information_vector(state))
-        
+
+    def load_model_from_object(self,state_dict):
+        self.neural_network.from_object(state_dict)
+
+    def get_model(self):
+        return self.neural_network.to_object()
+
     def act(self,state:List[Observation],timestep=0):
         """
         ACTION PREDICTION : ABS_JOINT_VELOCITY
