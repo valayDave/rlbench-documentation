@@ -15,27 +15,28 @@ class ReinforcementLearningSimulatorFlow(FlowSpec):
         # io_array will hold [[input][ouput]]
         self.possible_states= [
             [['joint_velocities','joint_positions','gripper_pose','task_low_dim_state'],['joint_velocities']],
-            # [['joint_velocities','gripper_pose','task_low_dim_state'],['joint_velocities']],
-            # [['joint_positions','gripper_pose','task_low_dim_state'],['joint_velocities']],
-            # [['gripper_pose','task_low_dim_state'],['joint_velocities']]
+            [['joint_velocities','gripper_pose','task_low_dim_state'],['joint_velocities']],
+            [['joint_positions','gripper_pose','task_low_dim_state'],['joint_velocities']],
+            [['gripper_pose','task_low_dim_state'],['joint_velocities']]
         ]
         self.reward_functions = [
             'MahattanReward',
-            # 'ExponentialMahattanReward',
-            # 'EuclideanReward',
-            # 'ExponentialEuclideanReward',
-            # 'HuberReward'
+            'ExponentialMahattanReward',
+            'EuclideanReward',
+            'ExponentialEuclideanReward',
+            'HuberReward'
         ]
         self.simulation_environments = [
             'ReachTarget',
-            # 'LeftTarget',
-            # 'RightTarget'
+            'LeftTarget',
+            'RightTarget'
         ]
         self.training_task = 'ReachTarget'
         self.model_args = DDPGArgs()
         self.episode_length=100 # Length of the Episode
         self.warmup = 50 # Warmup Steps for RL Algo
-        self.num_episodes=2 # Simulated Testing Epochs.
+        self.num_episodes=1000 # Train Epochs.
+        self.num_sim_episodes = 500 # Test Epochs.
         self.collect_gradients = False                                                                                                                                                                            
         self.next(self.reward_split_placeholder,foreach='possible_states')
 
@@ -104,7 +105,7 @@ class ReinforcementLearningSimulatorFlow(FlowSpec):
         curr_env = ReachTargetRLEnvironment(
                 reward_function,
                 task=task, 
-                num_episodes=self.num_episodes, 
+                num_episodes=self.num_sim_episodes, 
                 episode_length=self.episode_length)        
 
         agent.load_model_from_object(self.model)

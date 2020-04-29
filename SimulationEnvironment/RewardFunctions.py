@@ -26,7 +26,7 @@ class MahattanReward(RewardFunction):
         target_pose=np.array([getattr(state,'task_low_dim_state')])
         distance= abs(target_pose[0][0]-ee_pose[0][0])+abs(target_pose[0][1]-ee_pose[0][1])\
             +abs(target_pose[0][2]-ee_pose[0][2])
-        reward=np.tanh(distance)+rl_bench_reward
+        reward=np.tanh(1/distance)+rl_bench_reward*100
         return reward
 
 class ExponentialMahattanReward(RewardFunction):
